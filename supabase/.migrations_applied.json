@@ -1,0 +1,6 @@
+[
+  "001_initial_schema.sql",
+  "002_rls_policies.sql",
+  "003_realtime.sql",
+  "004_fix_group_policies.sql"
+]

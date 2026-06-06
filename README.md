@@ -10,6 +10,7 @@ A production-ready MVP for roommates to track shared household expenses. Built w
 - Net-balance settlement algorithm with simplified transfers
 - Monthly dashboard with summaries, category breakdown, and member balances
 - Real-time updates via Supabase Realtime
+- Email notifications via Gmail SMTP (new expenses, member joins, invite-by-email)
 - Row Level Security on all tables
 - Responsive UI with sidebar (desktop) and bottom navigation (mobile)
 
@@ -46,6 +47,16 @@ cp .env.example .env
 NEXT_PUBLIC_SUPABASE_URL=https://YOUR_REF.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...your_anon_key
 SUPABASE_DB_URL=postgresql://postgres:PASSWORD@db.YOUR_REF.supabase.co:5432/postgres
+```
+
+Optional (for email notifications — see [Email notifications](#email-notifications-gmail) below):
+
+```env
+SUPABASE_SERVICE_ROLE_KEY=eyJ...your_service_role_key
+SMTP_USER=your@gmail.com
+SMTP_PASS=your_gmail_app_password
+EMAIL_FROM=SplitFlat <your@gmail.com>
+NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
 
 Run `npm run db:validate-env` — all three must show the **same project ref**.
@@ -112,6 +123,48 @@ Expected result: Ahmed owes Talha **Rs. 2,500** for the current month (see seed 
 | `npm run lint` | ESLint |
 | `npm test` | Run balance algorithm unit tests |
 
+## Email notifications (Gmail)
+
+SplitFlat sends transactional emails when:
+
+| Event | Who gets emailed |
+|-------|------------------|
+| New expense added | All other group members |
+| Someone joins a group | Existing members |
+| Invite by email (Groups page) | The address you enter |
+
+### Setup (free — no domain verification)
+
+Uses **Gmail SMTP** via a Google [App Password](https://myaccount.google.com/apppasswords). Sends to any email address; no DNS/domain setup.
+
+1. Use a Gmail account (e.g. `talha.sajjad@qbatch.com` if it’s Google Workspace, or any `@gmail.com`).
+2. Enable **2-Step Verification** on the Google account.
+3. **Google Account → Security → App passwords** → create one for “Mail” → copy the 16-character password.
+4. Add to `.env` / Vercel:
+
+```env
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your@gmail.com
+SMTP_PASS=xxxx xxxx xxxx xxxx
+EMAIL_FROM=SplitFlat <your@gmail.com>
+SUPABASE_SERVICE_ROLE_KEY=eyJ...
+NEXT_PUBLIC_APP_URL=https://expense-calc-khaki.vercel.app
+```
+
+5. Supabase **Settings → API** → copy **service_role** key → `SUPABASE_SERVICE_ROLE_KEY` (required for expense/join notifications).
+6. Run `npm run db:migrate` so migration `005` adds `email` to profiles (backfills from auth).
+
+**Google Workspace:** Same steps; SMTP host stays `smtp.gmail.com`. Admin may need to allow app passwords.
+
+**Limits:** Gmail allows ~500 emails/day on free accounts — plenty for a household expense app.
+
+Emails are sent in the background — expense/group actions still succeed if email fails or env vars are missing.
+
+**Note:** Expense and join emails only go to **other** group members (not the person who added the expense or joined). Invite-by-email works for any address. If you're testing alone in a group, expense emails won't send — you need a second member.
+
+Check server logs for `[email] X/Y delivered` or `[notifications]` warnings when debugging delivery.
+
 ## Deploy to Vercel
 
 1. Push the repository to GitHub.
@@ -119,6 +172,10 @@ Expected result: Ahmed owes Talha **Rs. 2,500** for the current month (see seed 
 3. Add environment variables:
    - `NEXT_PUBLIC_SUPABASE_URL`
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - `SUPABASE_SERVICE_ROLE_KEY` (for email notifications)
+   - `SMTP_USER` and `SMTP_PASS` (Gmail app password)
+   - `EMAIL_FROM`
+   - `NEXT_PUBLIC_APP_URL` (your Vercel URL)
 4. Deploy.
 
 In Supabase → **Authentication → URL Configuration**, add your Vercel URL:
@@ -147,6 +204,9 @@ In Supabase → **Authentication → URL Configuration**, add your Vercel URL:
 - [ ] Expense list filters: category, search, sort
 - [ ] Settlement card shows correct payer/recipient in PKR
 - [ ] Realtime: expense added in tab A appears in tab B
+- [ ] Email: new expense notifies other group members
+- [ ] Email: joining a group notifies existing members
+- [ ] Email: invite-by-email on Groups page delivers invite link
 - [ ] Mobile layout: bottom nav and add button work
 - [ ] Production build succeeds (`npm run build`)
 

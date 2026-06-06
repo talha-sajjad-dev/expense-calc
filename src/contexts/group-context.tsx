@@ -41,6 +41,16 @@ export function GroupProvider({ children }: { children: React.ReactNode }) {
     [groups, activeGroupId]
   );
 
+  const pickActiveGroupId = useCallback((loaded: Group[], current: string | null) => {
+    if (current && loaded.some((g) => g.id === current)) return current;
+    const stored =
+      typeof window !== "undefined"
+        ? localStorage.getItem(ACTIVE_GROUP_KEY)
+        : null;
+    const validStored = loaded.find((g) => g.id === stored);
+    return validStored?.id ?? loaded[0]?.id ?? null;
+  }, []);
+
   const refreshGroups = useCallback(async () => {
     const {
       data: { user },
@@ -54,6 +64,7 @@ export function GroupProvider({ children }: { children: React.ReactNode }) {
 
     if (!memberships?.length) {
       setGroups([]);
+      setActiveGroupIdState(null);
       return;
     }
 
@@ -64,8 +75,10 @@ export function GroupProvider({ children }: { children: React.ReactNode }) {
       .in("id", groupIds)
       .order("created_at", { ascending: true });
 
-    setGroups((groupData as Group[]) ?? []);
-  }, [supabase]);
+    const loaded = (groupData as Group[]) ?? [];
+    setGroups(loaded);
+    setActiveGroupIdState((current) => pickActiveGroupId(loaded, current));
+  }, [supabase, pickActiveGroupId]);
 
   const refreshMembers = useCallback(async () => {
     if (!activeGroupId) {
@@ -93,13 +106,24 @@ export function GroupProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    async function init() {
+    let cancelled = false;
+    let loadGeneration = 0;
+
+    async function loadUserData() {
+      const generation = ++loadGeneration;
       setLoading(true);
       const {
         data: { user },
       } = await supabase.auth.getUser();
 
+      if (cancelled || generation !== loadGeneration) return;
+
       if (!user) {
+        setUserId(null);
+        setProfile(null);
+        setGroups([]);
+        setActiveGroupIdState(null);
+        setMembers([]);
         setLoading(false);
         return;
       }
@@ -114,12 +138,16 @@ export function GroupProvider({ children }: { children: React.ReactNode }) {
         .eq("id", user.id)
         .single();
 
+      if (cancelled || generation !== loadGeneration) return;
+
       setProfile(profileData as Profile);
 
       const { data: memberships } = await supabase
         .from("group_members")
         .select("group_id")
         .eq("user_id", user.id);
+
+      if (cancelled || generation !== loadGeneration) return;
 
       if (memberships?.length) {
         const groupIds = memberships.map((m) => m.group_id);
@@ -131,20 +159,34 @@ export function GroupProvider({ children }: { children: React.ReactNode }) {
 
         const loaded = (groupData as Group[]) ?? [];
         setGroups(loaded);
-
-        const stored =
-          typeof window !== "undefined"
-            ? localStorage.getItem(ACTIVE_GROUP_KEY)
-            : null;
-        const validStored = loaded.find((g) => g.id === stored);
-        setActiveGroupIdState(validStored?.id ?? loaded[0]?.id ?? null);
+        setActiveGroupIdState((current) => pickActiveGroupId(loaded, current));
+      } else {
+        setGroups([]);
+        setActiveGroupIdState(null);
       }
 
       setLoading(false);
     }
 
-    init();
-  }, [supabase]);
+    void loadUserData();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event) => {
+      if (
+        event === "SIGNED_IN" ||
+        event === "SIGNED_OUT" ||
+        event === "INITIAL_SESSION"
+      ) {
+        void loadUserData();
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
+  }, [supabase, pickActiveGroupId]);
 
   useEffect(() => {
     if (!activeGroupId) return;

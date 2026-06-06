@@ -22,7 +22,7 @@ import type { ExpenseSort } from "@/lib/expenses";
 import type { ExpenseWithDetails } from "@/lib/types";
 
 export default function ExpensesPage() {
-  const { activeGroup, members, userId } = useGroup();
+  const { activeGroup, members, userId, loading: groupLoading } = useGroup();
   const { expenses, loading, refresh } = useGroupExpenses(
     activeGroup?.id ?? null
   );
@@ -46,7 +46,18 @@ export default function ExpensesPage() {
     [members]
   );
 
-  if (!activeGroup || !userId) return null;
+  if (groupLoading || !activeGroup || !userId) {
+    return (
+      <div className="space-y-6">
+        <Skeleton className="h-10 w-48" />
+        <div className="space-y-3">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-24 rounded-xl" />
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

@@ -27,6 +27,10 @@ export const joinGroupSchema = z.object({
     .transform((v) => v.trim().toUpperCase()),
 });
 
+export const inviteEmailSchema = z.object({
+  email: z.string().email("Enter a valid email"),
+});
+
 export const expenseSchema = z.object({
   title: z.string().min(1, "Title is required"),
   amount: z.string().min(1, "Amount is required"),

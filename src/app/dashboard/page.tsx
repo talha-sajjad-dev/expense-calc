@@ -15,7 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import type { Profile } from "@/lib/types";
 
 export default function DashboardPage() {
-  const { activeGroup, members, userId } = useGroup();
+  const { activeGroup, members, userId, loading: groupLoading } = useGroup();
   const { expenses, loading } = useGroupExpenses(activeGroup?.id ?? null);
   const { year, month, label, goPrev, goNext, goToday } = useMonth();
 
@@ -33,7 +33,18 @@ export default function DashboardPage() {
     return getDashboardStats(expenses, memberIds, userId, year, month);
   }, [expenses, memberIds, userId, year, month]);
 
-  if (!activeGroup || !userId) return null;
+  if (groupLoading || !activeGroup || !userId) {
+    return (
+      <div className="space-y-8">
+        <Skeleton className="h-10 w-48" />
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-28 rounded-xl" />
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">

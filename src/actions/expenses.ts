@@ -2,6 +2,8 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { parseRupeesInput } from "@/lib/currency";
+import { notifyExpenseCreated } from "@/lib/notifications";
+import { scheduleNotification } from "@/lib/schedule-notification";
 import { revalidatePath } from "next/cache";
 import type { ExpenseCategory } from "@/lib/constants";
 
@@ -73,6 +75,27 @@ export async function createExpense(input: ExpenseInput) {
     await supabase.from("expenses").delete().eq("id", expense.id);
     return { error: e instanceof Error ? e.message : "Failed to add participants" };
   }
+
+  const { data: creatorProfile } = await supabase
+    .from("profiles")
+    .select("full_name")
+    .eq("id", user.id)
+    .single();
+
+  scheduleNotification(() =>
+    notifyExpenseCreated({
+      groupId: input.groupId,
+      creatorId: user.id,
+      creatorName:
+        creatorProfile?.full_name ??
+        user.email?.split("@")[0] ??
+        "Someone",
+      title: expense.title,
+      amountMinor: expense.amount_minor,
+      category: expense.category,
+      expenseDate: expense.expense_date,
+    })
+  );
 
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/expenses");

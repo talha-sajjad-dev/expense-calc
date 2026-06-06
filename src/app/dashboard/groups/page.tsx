@@ -3,11 +3,11 @@
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Copy, Check, Users, Plus } from "lucide-react";
+import { Copy, Check, Users, Plus, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { useGroup } from "@/contexts/group-context";
-import { createGroup, joinGroup } from "@/actions/groups";
-import { groupSchema, joinGroupSchema } from "@/lib/validations";
+import { createGroup, joinGroup, inviteToGroupByEmail } from "@/actions/groups";
+import { groupSchema, joinGroupSchema, inviteEmailSchema } from "@/lib/validations";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,6 +24,7 @@ import type { z } from "zod";
 
 type GroupForm = z.infer<typeof groupSchema>;
 type JoinForm = z.infer<typeof joinGroupSchema>;
+type InviteForm = z.infer<typeof inviteEmailSchema>;
 
 function initials(name: string) {
   return name
@@ -52,6 +53,11 @@ export default function GroupsPage() {
   const joinForm = useForm<JoinForm>({
     resolver: zodResolver(joinGroupSchema),
     defaultValues: { inviteCode: "" },
+  });
+
+  const inviteForm = useForm<InviteForm>({
+    resolver: zodResolver(inviteEmailSchema),
+    defaultValues: { email: "" },
   });
 
   useEffect(() => {
@@ -83,6 +89,17 @@ export default function GroupsPage() {
     createForm.reset();
     await refreshGroups();
     if (result.data) setActiveGroupId(result.data.id);
+  });
+
+  const onInvite = inviteForm.handleSubmit(async (values) => {
+    if (!activeGroup) return;
+    const result = await inviteToGroupByEmail(activeGroup.id, values.email);
+    if (result.error) {
+      toast.error(result.error);
+      return;
+    }
+    toast.success(`Invite sent to ${values.email}`);
+    inviteForm.reset();
   });
 
   const onJoin = joinForm.handleSubmit(async (values) => {
@@ -149,6 +166,29 @@ export default function GroupsPage() {
                 Copy invite link
               </Button>
             )}
+
+            <form onSubmit={onInvite} className="flex gap-2">
+              <div className="flex-1 space-y-2">
+                <Label htmlFor="inviteEmail" className="sr-only">
+                  Roommate email
+                </Label>
+                <Input
+                  id="inviteEmail"
+                  type="email"
+                  placeholder="roommate@example.com"
+                  autoComplete="email"
+                  {...inviteForm.register("email")}
+                />
+              </div>
+              <Button
+                type="submit"
+                variant="outline"
+                disabled={inviteForm.formState.isSubmitting}
+              >
+                <Mail className="h-4 w-4 mr-2" />
+                Email invite
+              </Button>
+            </form>
 
             <Separator />
 
